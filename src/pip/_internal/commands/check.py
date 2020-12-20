@@ -1,39 +1,51 @@
 import logging
 
-from pip._internal.basecommand import Command
-from pip._internal.operations.check import check_requirements
-from pip._internal.utils.misc import get_installed_distributions
+from pip._internal.cli.base_command import Command
+from pip._internal.cli.status_codes import ERROR, SUCCESS
+from pip._internal.operations.check import (
+    check_package_set,
+    create_package_set_from_installed,
+)
+from pip._internal.utils.misc import write_output
+from pip._internal.utils.typing import MYPY_CHECK_RUNNING
 
 logger = logging.getLogger(__name__)
+
+if MYPY_CHECK_RUNNING:
+    from optparse import Values
+    from typing import Any, List
 
 
 class CheckCommand(Command):
     """Verify installed packages have compatible dependencies."""
-    name = 'check'
+
     usage = """
       %prog [options]"""
-    summary = 'Verify installed packages have compatible dependencies.'
 
     def run(self, options, args):
-        dists = get_installed_distributions(local_only=False, skip=())
-        missing_reqs_dict, incompatible_reqs_dict = check_requirements(dists)
+        # type: (Values, List[Any]) -> int
 
-        for dist in dists:
-            for requirement in missing_reqs_dict.get(dist.key, []):
-                logger.info(
+        package_set, parsing_probs = create_package_set_from_installed()
+        missing, conflicting = check_package_set(package_set)
+
+        for project_name in missing:
+            version = package_set[project_name].version
+            for dependency in missing[project_name]:
+                write_output(
                     "%s %s requires %s, which is not installed.",
-                    dist.project_name, dist.version, requirement.project_name,
+                    project_name, version, dependency[0],
                 )
 
-            for requirement, actual in incompatible_reqs_dict.get(
-                    dist.key, []):
-                logger.info(
+        for project_name in conflicting:
+            version = package_set[project_name].version
+            for dep_name, dep_version, req in conflicting[project_name]:
+                write_output(
                     "%s %s has requirement %s, but you have %s %s.",
-                    dist.project_name, dist.version, requirement,
-                    actual.project_name, actual.version,
+                    project_name, version, req, dep_name, dep_version,
                 )
 
-        if missing_reqs_dict or incompatible_reqs_dict:
-            return 1
+        if missing or conflicting or parsing_probs:
+            return ERROR
         else:
-            logger.info("No broken requirements found.")
+            write_output("No broken requirements found.")
+            return SUCCESS
