@@ -6,6 +6,7 @@ from __future__ import absolute_import
 import glob
 import os
 import shutil
+import sys
 
 from pip._vendor import six
 
@@ -66,6 +67,32 @@ class Path(_base):
 
     __itruediv__ = __idiv__
 
+    def __floordiv__(self, paths):
+        """
+        Returns a list of paths prefixed with 'self'.
+
+        >>> '/home/a' // [bc.d, ef.g]
+        [/home/a/bc.d, /home/a/ef.g]
+        """
+        return [Path(self, path) for path in paths]
+
+    def __sub__(self, path):
+        """
+        Makes this path relative to another path.
+
+        >>> path_obj - '/home/a'
+        >>> path_obj - path_obj2
+        """
+        return Path(os.path.relpath(self, path))
+
+    def __rsub__(self, path):
+        """
+        Returns path relative to this path.
+
+        >>> "/home/a" - path_obj
+        """
+        return Path(os.path.relpath(path, self))
+
     def __add__(self, path):
         """
         >>> Path('/home/a') + 'bc.d'
@@ -81,7 +108,7 @@ class Path(_base):
         return Path(path + _base(self))
 
     def __repr__(self):
-        return u"Path({inner})".format(inner=_base.__repr__(self))
+        return u"Path(%s)" % _base.__repr__(self)
 
     def __hash__(self):
         return _base.__hash__(self)
@@ -94,29 +121,58 @@ class Path(_base):
         return os.path.basename(self)
 
     @property
-    def stem(self):
+    def namebase(self):
         """
         '/home/a/bc.d' -> 'bc'
         """
-        return Path(os.path.splitext(self)[0]).name
+        return self.noext.name
 
     @property
-    def suffix(self):
+    def noext(self):
+        """
+        '/home/a/bc.d' -> '/home/a/bc'
+        """
+        return Path(os.path.splitext(self)[0])
+
+    @property
+    def ext(self):
         """
         '/home/a/bc.d' -> '.d'
         """
         return Path(os.path.splitext(self)[1])
 
-    def resolve(self):
+    @property
+    def abspath(self):
+        """
+        './a/bc.d' -> '/home/a/bc.d'
+        """
+        return Path(os.path.abspath(self))
+
+    @property
+    def realpath(self):
         """
         Resolves symbolic links.
         """
         return Path(os.path.realpath(self))
 
     @property
-    def parent(self):
+    def normpath(self):
         """
-        Returns the parent directory of this path.
+        '/home/x/.././a//bc.d' -> '/home/a/bc.d'
+        """
+        return Path(os.path.normpath(self))
+
+    @property
+    def normcase(self):
+        """
+        Deals with case-insensitive filesystems
+        """
+        return Path(os.path.normcase(self))
+
+    @property
+    def folder(self):
+        """
+        Returns the folder of this path.
 
         '/home/a/bc.d' -> '/home/a'
         '/home/a/' -> '/home/a'
@@ -124,31 +180,68 @@ class Path(_base):
         """
         return Path(os.path.dirname(self))
 
+    @property
     def exists(self):
         """
         Returns True if the path exists.
         """
         return os.path.exists(self)
 
-    def mkdir(self, mode=0x1FF, exist_ok=False, parents=False):  # 0o777
+    @property
+    def atime(self):
+        """
+        Returns last accessed time.
+        """
+        return os.path.getatime(self)
+
+    @property
+    def mtime(self):
+        """
+        Returns last modified time.
+        """
+        return os.path.getmtime(self)
+
+    @property
+    def ctime(self):
+        """
+        Returns last changed time.
+        """
+        return os.path.getctime(self)
+
+    @classmethod
+    def supports_unicode(self):
+        """
+        Returns True if the system can handle Unicode file names.
+        """
+        return os.path.supports_unicode_filenames()
+
+    def walk(self, **kwargs):
+        """ Returns a generator that walks through a directory tree. """
+        return os.walk(self, **kwargs)
+
+    def mkdir(self, mode=0x1FF):  # 0o777
         """
         Creates a directory, if it doesn't exist already.
-
-        :param parents: Whether to create parent directories.
         """
+        if not self.exists:
+            os.mkdir(self, mode)
+        return self
 
-        maker_func = os.makedirs if parents else os.mkdir
-        try:
-            maker_func(self, mode)
-        except OSError:
-            if not exist_ok or not os.path.isdir(self):
-                raise
+    def makedirs(self, mode=0x1FF):  # 0o777
+        """
+        Like mkdir(), but also creates parent directories.
+        """
+        if not self.exists:
+            os.makedirs(self, mode)
+        return self
 
-    def unlink(self):
+    def remove(self):
         """
         Removes a file.
         """
         return os.remove(self)
+
+    rm = remove  # Alias.
 
     def rmdir(self):
         """
@@ -156,49 +249,52 @@ class Path(_base):
         """
         return os.rmdir(self)
 
+    def rmtree(self, noerrors=True):
+        """
+        Removes a directory tree. Ignores errors by default.
+        """
+        return shutil.rmtree(self, ignore_errors=noerrors)
+
+    def copy(self, to):
+        return shutil.copy(self, to)
+
+    def copytree(self, to):
+        """
+        Copies a directory tree to another path.
+        """
+        return shutil.copytree(self, to, symlinks=True)
+
+    def move(self, to):
+        """
+        Moves a file or directory to another path.
+        """
+        return shutil.move(self, to)
+
     def rename(self, to):
         """
         Renames a file or directory. May throw an OSError.
         """
         return os.rename(self, to)
 
+    def renames(self, to):
+        return os.renames(self, to)
+
     def glob(self, pattern):
-        return (Path(i) for i in glob.iglob(self.joinpath(pattern)))
+        return (Path(i) for i in glob.iglob(self.join(pattern)))
 
-    def joinpath(self, *parts):
-        return Path(self, *parts)
-
-    # TODO: Remove after removing inheritance from str.
     def join(self, *parts):
-        raise RuntimeError('Path.join is invalid, use joinpath instead.')
-
-    def read_bytes(self):
-        # type: () -> bytes
-        with open(self, "rb") as fp:
-            return fp.read()
-
-    def write_bytes(self, content):
-        # type: (bytes) -> None
-        with open(self, "wb") as f:
-            f.write(content)
+        return Path(self, *parts)
 
     def read_text(self):
         with open(self, "r") as fp:
             return fp.read()
 
-    def write_text(self, content):
+    def write(self, content):
         with open(self, "w") as fp:
             fp.write(content)
 
-    def touch(self):
+    def touch(self, times=None):
         with open(self, "a") as fp:
-            path = fp.fileno() if os.utime in supports_fd else self
-            os.utime(path, None)  # times is not optional on Python 2.7
-
-    def symlink_to(self, target):
-        os.symlink(target, self)
-
-    def stat(self):
-        return os.stat(self)
+            os.utime(fp.fileno() if os.utime in supports_fd else self, times)
 
 curdir = Path(os.path.curdir)

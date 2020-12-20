@@ -10,7 +10,7 @@ import textwrap
 import pip._internal.configuration
 from pip._internal.utils.misc import ensure_dir
 
-# This is so that tests don't need to import pip._internal.configuration.
+# This is so that tests don't need to import pip.configuration
 kinds = pip._internal.configuration.kinds
 
 
@@ -22,21 +22,25 @@ class ConfigurationMixin(object):
         )
         self._files_to_clear = []
 
+        self._old_environ = os.environ.copy()
+
     def teardown(self):
         for fname in self._files_to_clear:
             fname.stop()
+
+        os.environ = self._old_environ
 
     def patch_configuration(self, variant, di):
         old = self.configuration._load_config_files
 
         @functools.wraps(old)
-        def overridden():
+        def overidden():
             # Manual Overload
             self.configuration._config[variant].update(di)
             self.configuration._parsers[variant].append((None, None))
             return old()
 
-        self.configuration._load_config_files = overridden
+        self.configuration._load_config_files = overidden
 
     @contextlib.contextmanager
     def tmpfile(self, contents):

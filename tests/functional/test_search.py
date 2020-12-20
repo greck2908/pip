@@ -1,11 +1,15 @@
-import logging
-
-import pretend
 import pytest
 
-from pip._internal.cli.status_codes import NO_MATCHES_FOUND, SUCCESS
-from pip._internal.commands import create_command
-from pip._internal.commands.search import highest_version, print_results, transform_hits
+from pip._internal.commands.search import (
+    SearchCommand, highest_version, print_results, transform_hits,
+)
+from pip._internal.status_codes import NO_MATCHES_FOUND, SUCCESS
+from tests.lib import pyversion
+
+if pyversion >= '3':
+    VERBOSE_FALSE = False
+else:
+    VERBOSE_FALSE = 0
 
 
 def test_version_compare():
@@ -19,7 +23,7 @@ def test_version_compare():
 
 def test_pypi_xml_transformation():
     """
-    Test transformation of data structures (PyPI xmlrpc to custom list).
+    Test transformation of data structures (pypi xmlrpc to custom list).
 
     """
     pypi_hits = [
@@ -56,7 +60,6 @@ def test_pypi_xml_transformation():
 
 
 @pytest.mark.network
-@pytest.mark.search
 def test_basic_search(script):
     """
     End to end test of search command.
@@ -70,13 +73,6 @@ def test_basic_search(script):
 
 
 @pytest.mark.network
-@pytest.mark.skip(
-    reason=("Warehouse search behavior is different and no longer returns "
-            "multiple results. See "
-            "https://github.com/pypa/warehouse/issues/3717 for more "
-            "information."),
-)
-@pytest.mark.search
 def test_multiple_search(script):
     """
     Test searching for multiple packages at once.
@@ -90,7 +86,6 @@ def test_multiple_search(script):
     assert 'Tools for parsing and using INI-style files' in output.stdout
 
 
-@pytest.mark.search
 def test_search_missing_argument(script):
     """
     Test missing required argument for search
@@ -100,35 +95,30 @@ def test_search_missing_argument(script):
 
 
 @pytest.mark.network
-@pytest.mark.search
 def test_run_method_should_return_success_when_find_packages():
     """
     Test SearchCommand.run for found package
     """
-    command = create_command('search')
-    cmdline = "--index=https://pypi.org/pypi pip"
-    with command.main_context():
-        options, args = command.parse_args(cmdline.split())
-        status = command.run(options, args)
+    command = SearchCommand()
+    cmdline = "--index=https://pypi.python.org/pypi pip"
+    options, args = command.parse_args(cmdline.split())
+    status = command.run(options, args)
     assert status == SUCCESS
 
 
 @pytest.mark.network
-@pytest.mark.search
 def test_run_method_should_return_no_matches_found_when_does_not_find_pkgs():
     """
     Test SearchCommand.run for no matches
     """
-    command = create_command('search')
-    cmdline = "--index=https://pypi.org/pypi nonexistentpackage"
-    with command.main_context():
-        options, args = command.parse_args(cmdline.split())
-        status = command.run(options, args)
+    command = SearchCommand()
+    cmdline = "--index=https://pypi.python.org/pypi nonexistentpackage"
+    options, args = command.parse_args(cmdline.split())
+    status = command.run(options, args)
     assert status == NO_MATCHES_FOUND
 
 
 @pytest.mark.network
-@pytest.mark.search
 def test_search_should_exit_status_code_zero_when_find_packages(script):
     """
     Test search exit status code for package found
@@ -138,7 +128,6 @@ def test_search_should_exit_status_code_zero_when_find_packages(script):
 
 
 @pytest.mark.network
-@pytest.mark.search
 def test_search_exit_status_code_when_finds_no_package(script):
     """
     Test search exit status code for no matches
@@ -147,36 +136,6 @@ def test_search_exit_status_code_when_finds_no_package(script):
     assert result.returncode == NO_MATCHES_FOUND, result.returncode
 
 
-@pytest.mark.search
-def test_latest_prerelease_install_message(caplog, monkeypatch):
-    """
-    Test documentation for installing pre-release packages is displayed
-    """
-    hits = [
-        {
-            'name': 'ni',
-            'summary': 'For knights who say Ni!',
-            'versions': ['1.0.0', '1.0.1a']
-        }
-    ]
-
-    installed_package = pretend.stub(project_name="ni")
-    monkeypatch.setattr("pip._vendor.pkg_resources.working_set",
-                        [installed_package])
-
-    dist = pretend.stub(version="1.0.0")
-    get_dist = pretend.call_recorder(lambda x: dist)
-    monkeypatch.setattr("pip._internal.commands.search.get_distribution",
-                        get_dist)
-    with caplog.at_level(logging.INFO):
-        print_results(hits)
-
-    message = caplog.records[-1].getMessage()
-    assert 'pre-release; install with "pip install --pre"' in message
-    assert get_dist.calls == [pretend.call('ni')]
-
-
-@pytest.mark.search
 def test_search_print_results_should_contain_latest_versions(caplog):
     """
     Test that printed search results contain the latest package versions
@@ -193,10 +152,7 @@ def test_search_print_results_should_contain_latest_versions(caplog):
             'versions': ['2.0.1', '2.0.3']
         }
     ]
-
-    with caplog.at_level(logging.INFO):
-        print_results(hits)
-
+    print_results(hits)
     log_messages = sorted([r.getMessage() for r in caplog.records])
     assert log_messages[0].startswith('testlib1 (1.0.5)')
     assert log_messages[1].startswith('testlib2 (2.0.3)')

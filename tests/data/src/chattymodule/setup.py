@@ -5,7 +5,7 @@ import sys
 
 from setuptools import setup
 
-print("HELLO FROM CHATTYMODULE {sys.argv[1]}".format(**locals()))
+print("HELLO FROM CHATTYMODULE %s" % (sys.argv[1],))
 print(os.environ)
 print(sys.argv)
 if "--fail" in sys.argv:

@@ -1,9 +1,7 @@
 #!/usr/bin/env python
-from setuptools import setup
-
-import simplewheel  # ensure dependency is installed
+from setuptools import find_packages, setup
 
 setup(name='pep518',
       version='3.0',
-      py_modules=['pep518'],
+      packages=find_packages()
       )

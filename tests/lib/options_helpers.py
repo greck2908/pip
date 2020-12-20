@@ -1,12 +1,16 @@
 """Provides helper classes for testing option handling in pip
 """
 
-from pip._internal.cli import cmdoptions
-from pip._internal.cli.base_command import Command
-from pip._internal.commands import CommandInfo, commands_dict
+import os
+
+from pip._internal import cmdoptions
+from pip._internal.basecommand import Command
+from pip._internal.commands import commands_dict
 
 
 class FakeCommand(Command):
+    name = 'fake'
+    summary = name
 
     def main(self, args):
         index_opts = cmdoptions.make_option_group(
@@ -20,9 +24,9 @@ class FakeCommand(Command):
 class AddFakeCommandMixin(object):
 
     def setup(self):
-        commands_dict['fake'] = CommandInfo(
-            'tests.lib.options_helpers', 'FakeCommand', 'fake summary',
-        )
+        self.environ_before = os.environ.copy()
+        commands_dict[FakeCommand.name] = FakeCommand
 
     def teardown(self):
-        commands_dict.pop('fake')
+        os.environ = self.environ_before
+        commands_dict.pop(FakeCommand.name)

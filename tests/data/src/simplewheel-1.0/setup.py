@@ -1,9 +1,7 @@
 #!/usr/bin/env python
-from setuptools import setup
-
-import simplewheel
+from setuptools import find_packages, setup
 
 setup(name='simplewheel',
-      version=simplewheel.__version__,
-      packages=['simplewheel'],
+      version='1.0',
+      packages=find_packages()
       )

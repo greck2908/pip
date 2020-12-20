@@ -28,5 +28,5 @@ def test_bad_algo_option(script, tmpdir):
 def _hello_file(tmpdir):
     """Return a temp file to hash containing "hello"."""
     file = tmpdir / 'hashable'
-    file.write_text('hello')
+    file.write('hello')
     return file

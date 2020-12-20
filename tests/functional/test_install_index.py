@@ -3,8 +3,10 @@ import textwrap
 
 from pip._vendor.six.moves.urllib import parse as urllib_parse
 
+from tests.lib import pyversion
 
-def test_find_links_relative_path(script, data, with_wheel):
+
+def test_find_links_relative_path(script, data):
     """Test find-links as a relative path."""
     result = script.pip(
         'install',
@@ -14,56 +16,59 @@ def test_find_links_relative_path(script, data, with_wheel):
         'packages/',
         cwd=data.root,
     )
-    dist_info_folder = (
-        script.site_packages / 'parent-0.1.dist-info'
+    egg_info_folder = (
+        script.site_packages / 'parent-0.1-py%s.egg-info' % pyversion
     )
     initools_folder = script.site_packages / 'parent'
-    result.did_create(dist_info_folder)
-    result.did_create(initools_folder)
+    assert egg_info_folder in result.files_created, str(result)
+    assert initools_folder in result.files_created, str(result)
 
 
-def test_find_links_requirements_file_relative_path(script, data, with_wheel):
+def test_find_links_requirements_file_relative_path(script, data):
     """Test find-links as a relative path to a reqs file."""
-    script.scratch_path.joinpath("test-req.txt").write_text(textwrap.dedent("""
+    script.scratch_path.join("test-req.txt").write(textwrap.dedent("""
         --no-index
-        --find-links={}
+        --find-links=%s
         parent==0.1
-        """ .format(data.packages.replace(os.path.sep, '/'))))
+        """ % data.packages.replace(os.path.sep, '/')))
     result = script.pip(
         'install',
         '-r',
         script.scratch_path / "test-req.txt",
         cwd=data.root,
     )
-    dist_info_folder = (
-        script.site_packages / 'parent-0.1.dist-info'
+    egg_info_folder = (
+        script.site_packages / 'parent-0.1-py%s.egg-info' % pyversion
     )
     initools_folder = script.site_packages / 'parent'
-    result.did_create(dist_info_folder)
-    result.did_create(initools_folder)
+    assert egg_info_folder in result.files_created, str(result)
+    assert initools_folder in result.files_created, str(result)
 
 
-def test_install_from_file_index_hash_link(script, data, with_wheel):
+def test_install_from_file_index_hash_link(script, data):
     """
     Test that a pkg can be installed from a file:// index using a link with a
     hash
     """
     result = script.pip('install', '-i', data.index_url(), 'simple==1.0')
-    dist_info_folder = (
-        script.site_packages / 'simple-1.0.dist-info'
+    egg_info_folder = (
+        script.site_packages / 'simple-1.0-py%s.egg-info' % pyversion
     )
-    result.did_create(dist_info_folder)
+    assert egg_info_folder in result.files_created, str(result)
 
 
-def test_file_index_url_quoting(script, data, with_wheel):
+def test_file_index_url_quoting(script, data):
     """
     Test url quoting of file index url with a space
     """
     index_url = data.index_url(urllib_parse.quote("in dex"))
     result = script.pip(
-        'install', '-vvv', '--index-url', index_url, 'simple'
+        'install', '-vvv', '--index-url', index_url, 'simple',
+        expect_error=False,
     )
-    result.did_create(script.site_packages / 'simple')
-    result.did_create(
-        script.site_packages / 'simple-1.0.dist-info'
+    assert (script.site_packages / 'simple') in result.files_created, (
+        str(result.stdout)
     )
+    assert (
+        script.site_packages / 'simple-1.0-py%s.egg-info' % pyversion
+    ) in result.files_created, str(result)

@@ -2,7 +2,9 @@
 Test specific for the --no-color option
 """
 import os
+import platform
 import subprocess
+import sys
 
 import pytest
 
